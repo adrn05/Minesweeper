@@ -112,7 +112,6 @@ class StartMenu extends JFrame {
     }
 
     private void resetScoreboard() {
-        // Passwortabfrage für das Zurücksetzen des Scoreboards
         String password = JOptionPane.showInputDialog(this, "Please enter password to reset the scoreboard:");
         if ("Sw33p3r".equals(password)) {
             scoreboard.clear();
