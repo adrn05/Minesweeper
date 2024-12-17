@@ -33,6 +33,10 @@ class StartMenu extends JFrame {
     private static final int MAX_SCORES = 10;
     private final ArrayList<ScoreEntry> scoreboard;
 
+    // Spieloptionen
+    private int gridSize = 10; // Standardgröße
+    private int numMines = 15; // Standardanzahl Minen
+
     public StartMenu() {
         setTitle("Minesweeper");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -46,8 +50,12 @@ class StartMenu extends JFrame {
         startButton.setFont(new Font("Arial", Font.BOLD, 24));
         startButton.addActionListener(e -> {
             dispose();
-            new Minesweeper(loadScoreboard());
+            new Minesweeper(loadScoreboard(), gridSize, numMines, "Normal");
         });
+
+        JButton settingsButton = new JButton("Settings");
+        settingsButton.setFont(new Font("Arial", Font.BOLD, 24));
+        settingsButton.addActionListener(e -> showSettingsDialog());
 
         JButton scoreboardButton = new JButton("Scoreboard");
         scoreboardButton.setFont(new Font("Arial", Font.BOLD, 24));
@@ -62,8 +70,9 @@ class StartMenu extends JFrame {
         quitButton.addActionListener(e -> System.exit(0));
 
         JPanel buttonPanel = new JPanel();
-        buttonPanel.setLayout(new GridLayout(4, 1, 10, 10));
+        buttonPanel.setLayout(new GridLayout(5, 1, 10, 10));
         buttonPanel.add(startButton);
+        buttonPanel.add(settingsButton);
         buttonPanel.add(scoreboardButton);
         buttonPanel.add(resetButton);
         buttonPanel.add(quitButton);
@@ -72,9 +81,11 @@ class StartMenu extends JFrame {
 
         scoreboard = loadScoreboard();
 
-        setSize(400, 300);
+        setSize(400, 400);
         setLocationRelativeTo(null);
         setVisible(true);
+
+
     }
 
     private void showScoreboard() {
@@ -121,22 +132,73 @@ class StartMenu extends JFrame {
             JOptionPane.showMessageDialog(this, "Wrong password!");
         }
     }
+
+    private void showSettingsDialog() {
+        String[] difficultyOptions = {"Easy", "Normal", "Hard", "Custom"};
+        int choice = JOptionPane.showOptionDialog(this, "Select difficulty level:", "Settings", JOptionPane.DEFAULT_OPTION,
+                JOptionPane.QUESTION_MESSAGE, null, difficultyOptions, difficultyOptions[1]);
+
+        String difficulty = "Normal";
+        switch (choice) {
+            case 0: // Easy
+                gridSize = 8;
+                numMines = 10;
+                difficulty = "Easy";
+                break;
+            case 1: // Normal
+                gridSize = 10;
+                numMines = 15;
+                difficulty = "Normal";
+                break;
+            case 2: // Hard
+                gridSize = 15;
+                numMines = 40;
+                difficulty = "Hard";
+                break;
+            case 3: // Custom
+                String gridSizeInput = JOptionPane.showInputDialog(this, "Enter grid size (min: 5, max: 20):", gridSize);
+                String numMinesInput = JOptionPane.showInputDialog(this, "Enter number of mines (min: 1):", numMines);
+
+                try {
+                    int customGridSize = Integer.parseInt(gridSizeInput);
+                    int customNumMines = Integer.parseInt(numMinesInput);
+
+                    if (customGridSize >= 5 && customGridSize <= 20 && customNumMines >= 1 && customNumMines < (customGridSize * customGridSize)) {
+                        gridSize = customGridSize;
+                        numMines = customNumMines;
+                        difficulty = "Custom";
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Invalid values entered. Using default settings.", "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                } catch (NumberFormatException e) {
+                    JOptionPane.showMessageDialog(this, "Invalid input. Using default settings.", "Error", JOptionPane.ERROR_MESSAGE);
+                }
+                break;
+            default:
+                // No changes
+                break;
+        }
+    }
 }
 
 class Minesweeper extends JFrame {
-    private static final int GRID_SIZE = 10; // Grid size (10x10)
-    private static final int NUM_MINES = 15; // Number of mines
+    private final int GRID_SIZE;
+    private final int NUM_MINES;
+    private final String difficulty;
 
     private Tile[][] grid;
     private JLabel timerLabel;
-    private javax.swing.Timer timer; 
+    private javax.swing.Timer timer;
     private int elapsedTime;
     private JPanel gridPanel;
     private boolean isPaused;
     private final ArrayList<ScoreEntry> scoreboard;
 
-    public Minesweeper(ArrayList<ScoreEntry> scoreboard) {
+    public Minesweeper(ArrayList<ScoreEntry> scoreboard, int gridSize, int numMines, String difficulty) {
         this.scoreboard = scoreboard;
+        this.GRID_SIZE = gridSize;
+        this.NUM_MINES = numMines;
+        this.difficulty = difficulty;
 
         setTitle("Minesweeper");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -145,7 +207,7 @@ class Minesweeper extends JFrame {
         elapsedTime = 0;
         isPaused = false;
 
-        timerLabel = new JLabel("Time: 0 seconds", SwingConstants.CENTER);
+        timerLabel = new JLabel("Time: 0 seconds  |  Press P to Pause", SwingConstants.CENTER);
         timerLabel.setFont(new Font("Arial", Font.BOLD, 16));
         add(timerLabel, BorderLayout.NORTH);
 
@@ -236,7 +298,7 @@ class Minesweeper extends JFrame {
     private void resetGame() {
         timer.stop();
         elapsedTime = 0;
-        timerLabel.setText("Time: 0 seconds");
+        timerLabel.setText("Time: 0 seconds  |  Press P to Pause");
         isPaused = false;
 
         getContentPane().removeAll();
@@ -257,7 +319,7 @@ class Minesweeper extends JFrame {
         timer = new javax.swing.Timer(1000, e -> {
             if (!isPaused) {
                 elapsedTime++;
-                timerLabel.setText("Time: " + elapsedTime + " seconds");
+                timerLabel.setText("Time: " + elapsedTime + " seconds  |  Press P to Pause");
             }
         });
         timer.start();
@@ -279,7 +341,7 @@ class Minesweeper extends JFrame {
             timer.start();
         } else if (choice == 1) {
             dispose();
-            new StartMenu(); 
+            new StartMenu(); // Go back to main menu
         }
     }
 
@@ -322,7 +384,7 @@ class Minesweeper extends JFrame {
             this.hasMine = false;
             this.isRevealed = false;
             this.isFlagged = false;
-            this.label = new JLabel("", SwingConstants.CENTER); 
+            this.label = new JLabel("", SwingConstants.CENTER);
 
             setLayout(new BorderLayout());
             add(label, BorderLayout.CENTER);
@@ -380,7 +442,7 @@ class Minesweeper extends JFrame {
                     resetGame();
                 } else {
                     dispose();
-                    new StartMenu(); 
+                    new StartMenu();
                 }
             } else {
                 label.setText(neighborCount == 0 ? "" : String.valueOf(neighborCount));
@@ -396,7 +458,9 @@ class Minesweeper extends JFrame {
                 if (option == JOptionPane.OK_OPTION) {
                     String name = JOptionPane.showInputDialog(Minesweeper.this, "Enter your name:");
                     if (name != null && !name.isEmpty()) {
-                        StartMenu.addScore(scoreboard, name, elapsedTime);
+                        if ("Normal".equals(difficulty)) {
+                            StartMenu.addScore(scoreboard, name, elapsedTime);
+                        }
                     }
                 }
                 resetGame();
@@ -414,9 +478,16 @@ class Minesweeper extends JFrame {
                     }
                 }
             }
-
             if (flaggedNeighbors == neighborCount) {
-                revealNeighbors();
+                for (int i = -1; i <= 1; i++) {
+                    for (int j = -1; j <= 1; j++) {
+                        int r = row + i;
+                        int c = col + j;
+                        if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
+                            grid[r][c].reveal();
+                        }
+                    }
+                }
             }
         }
 
@@ -433,9 +504,13 @@ class Minesweeper extends JFrame {
         }
 
         private void toggleFlag() {
-            if (isRevealed) return;
+            if (isRevealed) {
+                return;
+            }
+
             isFlagged = !isFlagged;
             label.setText(isFlagged ? "F" : "");
+            setBackground(isFlagged ? Color.YELLOW : Color.LIGHT_GRAY);
         }
     }
 }
