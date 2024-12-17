@@ -1,0 +1,442 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.*;
+import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new StartMenu());
+    }
+}
+
+class ScoreEntry implements Serializable {
+    private final String name;
+    private final int time;
+
+    public ScoreEntry(String name, int time) {
+        this.name = name;
+        this.time = time;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public int getTime() {
+        return time;
+    }
+}
+
+class StartMenu extends JFrame {
+    private static final String SCOREBOARD_FILE = "scoreboard.ser";
+    private static final int MAX_SCORES = 10;
+    private final ArrayList<ScoreEntry> scoreboard;
+
+    public StartMenu() {
+        setTitle("Minesweeper");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        JLabel titleLabel = new JLabel("Minesweeper", SwingConstants.CENTER);
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 32));
+        add(titleLabel, BorderLayout.NORTH);
+
+        JButton startButton = new JButton("Start Game");
+        startButton.setFont(new Font("Arial", Font.BOLD, 24));
+        startButton.addActionListener(e -> {
+            dispose();
+            new Minesweeper(loadScoreboard());
+        });
+
+        JButton scoreboardButton = new JButton("Scoreboard");
+        scoreboardButton.setFont(new Font("Arial", Font.BOLD, 24));
+        scoreboardButton.addActionListener(e -> showScoreboard());
+
+        JButton resetButton = new JButton("Reset Scoreboard");
+        resetButton.setFont(new Font("Arial", Font.BOLD, 24));
+        resetButton.addActionListener(e -> resetScoreboard());
+
+        JButton quitButton = new JButton("Quit");
+        quitButton.setFont(new Font("Arial", Font.BOLD, 24));
+        quitButton.addActionListener(e -> System.exit(0));
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new GridLayout(4, 1, 10, 10));
+        buttonPanel.add(startButton);
+        buttonPanel.add(scoreboardButton);
+        buttonPanel.add(resetButton);
+        buttonPanel.add(quitButton);
+
+        add(buttonPanel, BorderLayout.CENTER);
+
+        scoreboard = loadScoreboard();
+
+        setSize(400, 300);
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    private void showScoreboard() {
+        StringBuilder sb = new StringBuilder("Top 10 Scores:\n\n");
+        for (int i = 0; i < scoreboard.size(); i++) {
+            ScoreEntry entry = scoreboard.get(i);
+            sb.append((i + 1)).append(". ").append(entry.getName()).append(" - ").append(entry.getTime()).append(" seconds\n");
+        }
+        JOptionPane.showMessageDialog(this, sb.toString(), "Scoreboard", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private ArrayList<ScoreEntry> loadScoreboard() {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(SCOREBOARD_FILE))) {
+            return (ArrayList<ScoreEntry>) ois.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            return new ArrayList<>();
+        }
+    }
+
+    public static void saveScoreboard(ArrayList<ScoreEntry> scoreboard) {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(SCOREBOARD_FILE))) {
+            oos.writeObject(scoreboard);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void addScore(ArrayList<ScoreEntry> scoreboard, String name, int time) {
+        scoreboard.add(new ScoreEntry(name, time));
+        scoreboard.sort(Comparator.comparingInt(ScoreEntry::getTime));
+        while (scoreboard.size() > MAX_SCORES) {
+            scoreboard.remove(scoreboard.size() - 1);
+        }
+        saveScoreboard(scoreboard);
+    }
+
+    private void resetScoreboard() {
+        // Passwortabfrage für das Zurücksetzen des Scoreboards
+        String password = JOptionPane.showInputDialog(this, "Please enter password to reset the scoreboard:");
+        if ("Sw33p3r".equals(password)) {
+            scoreboard.clear();
+            saveScoreboard(scoreboard);
+            JOptionPane.showMessageDialog(this, "Scoreboard has been reset.");
+        } else {
+            JOptionPane.showMessageDialog(this, "Wrong password!");
+        }
+    }
+}
+
+class Minesweeper extends JFrame {
+    private static final int GRID_SIZE = 10; // Grid size (10x10)
+    private static final int NUM_MINES = 15; // Number of mines
+
+    private Tile[][] grid;
+    private JLabel timerLabel;
+    private javax.swing.Timer timer; // Verwende hier javax.swing.Timer
+    private int elapsedTime;
+    private JPanel gridPanel;
+    private boolean isPaused;
+    private final ArrayList<ScoreEntry> scoreboard;
+
+    public Minesweeper(ArrayList<ScoreEntry> scoreboard) {
+        this.scoreboard = scoreboard;
+
+        setTitle("Minesweeper");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        elapsedTime = 0;
+        isPaused = false;
+
+        timerLabel = new JLabel("Time: 0 seconds", SwingConstants.CENTER);
+        timerLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        add(timerLabel, BorderLayout.NORTH);
+
+        gridPanel = new JPanel(new GridLayout(GRID_SIZE, GRID_SIZE));
+        grid = new Tile[GRID_SIZE][GRID_SIZE];
+        initializeGrid();
+        placeMines();
+        calculateNeighborCounts();
+
+        add(gridPanel, BorderLayout.CENTER);
+
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                adjustTileSizes();
+            }
+        });
+
+        addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_P) {
+                    togglePause();
+                }
+            }
+        });
+
+        setFocusable(true);
+        setFocusTraversalKeysEnabled(false);
+
+        startTimer();
+
+        setSize(600, 650);
+        setLocationRelativeTo(null);
+        setVisible(true);
+    }
+
+    private void initializeGrid() {
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                Tile tile = new Tile(row, col);
+                grid[row][col] = tile;
+                gridPanel.add(tile);
+            }
+        }
+    }
+
+    private void placeMines() {
+        Random random = new Random();
+        int minesPlaced = 0;
+
+        while (minesPlaced < NUM_MINES) {
+            int row = random.nextInt(GRID_SIZE);
+            int col = random.nextInt(GRID_SIZE);
+
+            if (!grid[row][col].hasMine()) {
+                grid[row][col].setMine(true);
+                minesPlaced++;
+            }
+        }
+    }
+
+    private void calculateNeighborCounts() {
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                if (!grid[row][col].hasMine()) {
+                    int count = countNeighboringMines(row, col);
+                    grid[row][col].setNeighborCount(count);
+                }
+            }
+        }
+    }
+
+    private int countNeighboringMines(int row, int col) {
+        int count = 0;
+        for (int i = -1; i <= 1; i++) {
+            for (int j = -1; j <= 1; j++) {
+                int r = row + i;
+                int c = col + j;
+                if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE && grid[r][c].hasMine()) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private void resetGame() {
+        timer.stop();
+        elapsedTime = 0;
+        timerLabel.setText("Time: 0 seconds");
+        isPaused = false;
+
+        getContentPane().removeAll();
+        gridPanel = new JPanel(new GridLayout(GRID_SIZE, GRID_SIZE));
+        grid = new Tile[GRID_SIZE][GRID_SIZE];
+        initializeGrid();
+        placeMines();
+        calculateNeighborCounts();
+        add(timerLabel, BorderLayout.NORTH);
+        add(gridPanel, BorderLayout.CENTER);
+        revalidate();
+        repaint();
+
+        startTimer();
+    }
+
+    private void startTimer() {
+        timer = new javax.swing.Timer(1000, e -> {
+            if (!isPaused) {
+                elapsedTime++;
+                timerLabel.setText("Time: " + elapsedTime + " seconds");
+            }
+        });
+        timer.start();
+    }
+
+    private void togglePause() {
+        isPaused = !isPaused;
+        if (isPaused) {
+            showPauseMenu();
+        }
+    }
+
+    private void showPauseMenu() {
+        String[] options = {"Resume", "Back to Main Menu"};
+        int choice = JOptionPane.showOptionDialog(this, "Game Paused", "Pause Menu", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+
+        if (choice == 0) {
+            isPaused = false;
+            timer.start();
+        } else if (choice == 1) {
+            dispose();
+            new StartMenu(); // Go back to main menu
+        }
+    }
+
+    private boolean checkWinCondition() {
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                Tile tile = grid[row][col];
+                if (!tile.hasMine() && !tile.isRevealed()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private void adjustTileSizes() {
+        int panelWidth = gridPanel.getWidth();
+        int panelHeight = gridPanel.getHeight();
+        int tileSize = Math.min(panelWidth / GRID_SIZE, panelHeight / GRID_SIZE);
+
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++) {
+                grid[row][col].setPreferredSize(new Dimension(tileSize, tileSize));
+            }
+        }
+        gridPanel.revalidate();
+    }
+
+    class Tile extends JPanel {
+        private final int row, col;
+        private boolean hasMine;
+        private boolean isRevealed;
+        private boolean isFlagged;
+        private int neighborCount;
+        private final JLabel label;
+
+        public Tile(int row, int col) {
+            this.row = row;
+            this.col = col;
+            this.hasMine = false;
+            this.isRevealed = false;
+            this.isFlagged = false;
+            this.label = new JLabel("", SwingConstants.CENTER); // Use JLabel for text
+
+            setLayout(new BorderLayout());
+            add(label, BorderLayout.CENTER);
+
+            setBorder(BorderFactory.createLineBorder(Color.GRAY));
+            setBackground(Color.LIGHT_GRAY);
+
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    if (isPaused) return;
+                    if (SwingUtilities.isLeftMouseButton(e)) {
+                        if (isRevealed && neighborCount > 0) {
+                            revealNeighborsIfFlaggedMatches();
+                        } else {
+                            reveal();
+                        }
+                    } else if (SwingUtilities.isRightMouseButton(e)) {
+                        toggleFlag();
+                    }
+                }
+            });
+        }
+
+        public boolean hasMine() {
+            return hasMine;
+        }
+
+        public void setMine(boolean hasMine) {
+            this.hasMine = hasMine;
+        }
+
+        public void setNeighborCount(int count) {
+            this.neighborCount = count;
+        }
+
+        public boolean isRevealed() {
+            return isRevealed;
+        }
+
+        private void reveal() {
+            if (isRevealed || isFlagged) {
+                return;
+            }
+
+            isRevealed = true;
+            setBackground(Color.WHITE);
+
+            if (hasMine) {
+                setBackground(Color.RED);
+                label.setText("M"); // Mark mine
+                timer.stop();
+                int option = JOptionPane.showConfirmDialog(Minesweeper.this, "Game Over! Play again?", "Game Over", JOptionPane.YES_NO_OPTION);
+                if (option == JOptionPane.YES_OPTION) {
+                    resetGame();
+                } else {
+                    dispose();  // Returning to the main menu
+                    new StartMenu(); // Open the main menu
+                }
+            } else {
+                label.setText(neighborCount == 0 ? "" : String.valueOf(neighborCount));
+                if (neighborCount == 0) {
+                    revealNeighbors();
+                }
+            }
+
+            if (checkWinCondition()) {
+                timer.stop();
+                String message = "You win! Time: " + elapsedTime + " seconds.\n";
+                int option = JOptionPane.showConfirmDialog(Minesweeper.this, message + "Enter your name:", "Congratulations!", JOptionPane.OK_CANCEL_OPTION);
+                if (option == JOptionPane.OK_OPTION) {
+                    String name = JOptionPane.showInputDialog(Minesweeper.this, "Enter your name:");
+                    if (name != null && !name.isEmpty()) {
+                        StartMenu.addScore(scoreboard, name, elapsedTime);
+                    }
+                }
+                resetGame();
+            }
+        }
+
+        private void revealNeighborsIfFlaggedMatches() {
+            int flaggedNeighbors = 0;
+            for (int i = -1; i <= 1; i++) {
+                for (int j = -1; j <= 1; j++) {
+                    int r = row + i;
+                    int c = col + j;
+                    if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE && grid[r][c].isFlagged) {
+                        flaggedNeighbors++;
+                    }
+                }
+            }
+
+            if (flaggedNeighbors == neighborCount) {
+                revealNeighbors();
+            }
+        }
+
+        private void revealNeighbors() {
+            for (int i = -1; i <= 1; i++) {
+                for (int j = -1; j <= 1; j++) {
+                    int r = row + i;
+                    int c = col + j;
+                    if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
+                        grid[r][c].reveal();
+                    }
+                }
+            }
+        }
+
+        private void toggleFlag() {
+            if (isRevealed) return;
+            isFlagged = !isFlagged;
+            label.setText(isFlagged ? "F" : "");
+        }
+    }
+}
