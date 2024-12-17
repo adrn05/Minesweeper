@@ -129,7 +129,7 @@ class Minesweeper extends JFrame {
 
     private Tile[][] grid;
     private JLabel timerLabel;
-    private javax.swing.Timer timer; // Verwende hier javax.swing.Timer
+    private javax.swing.Timer timer; 
     private int elapsedTime;
     private JPanel gridPanel;
     private boolean isPaused;
@@ -279,7 +279,7 @@ class Minesweeper extends JFrame {
             timer.start();
         } else if (choice == 1) {
             dispose();
-            new StartMenu(); // Go back to main menu
+            new StartMenu(); 
         }
     }
 
@@ -322,7 +322,7 @@ class Minesweeper extends JFrame {
             this.hasMine = false;
             this.isRevealed = false;
             this.isFlagged = false;
-            this.label = new JLabel("", SwingConstants.CENTER); // Use JLabel for text
+            this.label = new JLabel("", SwingConstants.CENTER); 
 
             setLayout(new BorderLayout());
             add(label, BorderLayout.CENTER);
@@ -373,14 +373,14 @@ class Minesweeper extends JFrame {
 
             if (hasMine) {
                 setBackground(Color.RED);
-                label.setText("M"); // Mark mine
+                label.setText("M");
                 timer.stop();
                 int option = JOptionPane.showConfirmDialog(Minesweeper.this, "Game Over! Play again?", "Game Over", JOptionPane.YES_NO_OPTION);
                 if (option == JOptionPane.YES_OPTION) {
                     resetGame();
                 } else {
-                    dispose();  // Returning to the main menu
-                    new StartMenu(); // Open the main menu
+                    dispose();
+                    new StartMenu(); 
                 }
             } else {
                 label.setText(neighborCount == 0 ? "" : String.valueOf(neighborCount));
